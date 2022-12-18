@@ -98,11 +98,11 @@ void readNFC()
     SerialUSB.println("");
     delay(1000);  // 1 second halt
   }
-  else
+  /*else
   {
     // PN532 probably timed out waiting for a card
     SerialUSB.println("Timed out! Waiting for a card...");
-  }
+  }*/
 }
 
 void loop()
