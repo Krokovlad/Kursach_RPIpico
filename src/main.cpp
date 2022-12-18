@@ -7,6 +7,15 @@
 PN532_HSU pn532hsu(Serial2);
 PN532 nfc(pn532hsu);
 
+/*
+ПИНЫ:
+  Датчик Отпечатков:
+    -Чёрный - RX:GPIO0
+    -Жёлтый - TX:GPIO1
+  RFID:
+    -Серый - TX:GPIO8
+    -Белый - RX:GPIO9
+*/
 
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 String tagId = "None", dispTag = "None";
