@@ -2,12 +2,14 @@
 #include <PN532.h>
 #include <PN532_HSU.h>
 #include <Adafruit_Fingerprint.h>
-
+#include <FreeRTOS.h> 
+#include <semphr.h> 
 #define mySerial Serial1
-
+SemaphoreHandle_t mutex_v; 
 PN532_HSU pn532hsu(Serial2);
 PN532 nfc(pn532hsu);
-
+TaskHandle_t xHandle;
+TaskHandle_t xHandle1;
 /*
 ПИНЫ:
   Датчик Отпечатков:
@@ -25,26 +27,28 @@ byte nuidPICC[4];
 void setup(void)
 {
   pinMode(2, OUTPUT);
-  SerialUSB.begin(115200);
-  delay(100);
-  SerialUSB.println("Hello Maker!");
+  Serial.begin(115200);
+  while(!Serial){
+    delay(1);
+  }
+  Serial.println("Hello Maker!");
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (! versiondata)
   {
-    SerialUSB.print("Didn't Find PN53x Module");
+    Serial.print("Didn't Find PN53x Module");
   }
   // Got valid data, print it out!
-  SerialUSB.print("Found chip PN5");
-  SerialUSB.println((versiondata >> 24) & 0xFF, HEX);
-  SerialUSB.print("Firmware ver. ");
-  SerialUSB.print((versiondata >> 16) & 0xFF, DEC);
-  SerialUSB.print('.'); 
-  SerialUSB.println((versiondata >> 8) & 0xFF, DEC);
+  Serial.print("Found chip PN5");
+  Serial.println((versiondata >> 24) & 0xFF, HEX);
+  Serial.print("Firmware ver. ");
+  Serial.print((versiondata >> 16) & 0xFF, DEC);
+  Serial.print('.'); 
+  Serial.println((versiondata >> 8) & 0xFF, DEC);
   // Configure board to read RFID tags
   nfc.SAMConfig();
   //Serial.println("Waiting for an ISO14443A Card ...");
-  SerialUSB.println("\n\nAdafruit finger detect test");
+  Serial.println("\n\nAdafruit finger detect test");
   finger.begin(57600);
   delay(5);
   if (finger.verifyPassword()) {
@@ -53,7 +57,15 @@ void setup(void)
     Serial.println("Did not find fingerprint sensor :(");
     //while (1) { delay(1); }
   }
+  mutex_v = xSemaphoreCreateBinary();
+  if (mutex_v == NULL) { 
+        Serial.println("Mutex can not be created"); 
+    } 
+    
+    xTaskCreate(accessCheck, "Task1", 128, NULL, 1, &xHandle1); 
+    xTaskCreate(grantAccess, "Task2", 128, NULL, 2, &xHandle);
 
+    Serial.println("tasks created");
 }
  
  int getFingerprintIDez() {
@@ -90,44 +102,56 @@ String readNFC()
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
   if (success)
   {
-    SerialUSB.print("UID Length: ");
-    SerialUSB.print(uidLength, DEC);
-    SerialUSB.println(" bytes");
-    SerialUSB.print("UID Value: ");
+    Serial.print("UID Length: ");
+    Serial.print(uidLength, DEC);
+    Serial.println(" bytes");
+    Serial.print("UID Value: ");
     for (uint8_t i = 0; i < uidLength; i++)
     {
       nuidPICC[i] = uid[i];
-      SerialUSB.print(" "); SerialUSB.print(uid[i], DEC);
+      Serial.print(" "); Serial.print(uid[i], DEC);
     }
-    SerialUSB.println();
+    Serial.println();
     tagId = tagToString(nuidPICC);
     dispTag = tagId;
-    SerialUSB.print(F("tagId is : "));
-    SerialUSB.println(tagId);
-    SerialUSB.println("");
-    delay(1000);  // 1 second halt
+    Serial.print(F("tagId is : "));
+    Serial.println(tagId);
+    Serial.println("");
+    delay(100);  // 1 second halt
   }
   return tagId;
 } 
 
-void grantAccess(){
-  digitalWrite(2, HIGH);
-  delay(1000);
-  digitalWrite(2, LOW);
-
+void grantAccess(void *pvParameters){
+  Serial.println("grantAccess");
+  while(1){
+  if(xSemaphoreTake(mutex_v, portMAX_DELAY)){
+    Serial.println("Semaphore Taken");
+    digitalWrite(2, HIGH);
+    vTaskDelay(5000/portTICK_PERIOD_MS);
+    digitalWrite(2, LOW);
+    //xSemaphoreGive(mutex_v); 
+    }
+  }
 }
 
-void accessCheck(){
-  int fingerID = getFingerprintIDez();
-  String nfcID = readNFC();
-  if(fingerID == 1 || nfcID == "161.162.95.29"){
-    grantAccess();
+void accessCheck(void *pvParameters){
+  Serial.println("accessCheck");
+  //xSemaphoreTake(mutex_v, portMAX_DELAY);
+  while(1){
+    Serial.print(".");
+    int fingerID = getFingerprintIDez();
+    String nfcID = readNFC();
+    if(fingerID == 1 || nfcID == "161.162.95.29"){
+        Serial.println("Semaphore Released");
+        xSemaphoreGive(mutex_v);
+    }
+    vTaskDelay(100/portTICK_PERIOD_MS); //заменить на yield
   }
-  delay(100);
 }
 
 void loop()
 {
-  accessCheck();
+  //accessCheck();
 }
 
