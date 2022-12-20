@@ -23,17 +23,15 @@ byte nuidPICC[4];
  
 void setup(void)
 {
+  pinMode(2, OUTPUT);
   SerialUSB.begin(115200);
   delay(100);
   SerialUSB.println("Hello Maker!");
-  
-  //  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (! versiondata)
   {
     SerialUSB.print("Didn't Find PN53x Module");
-    //while (1); // Halt
   }
   // Got valid data, print it out!
   SerialUSB.print("Found chip PN5");
@@ -82,8 +80,9 @@ String tagToString(byte id[4])
 }
  
  
-void readNFC()
+String readNFC()
 {
+  tagId = "None";
   boolean success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                       // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
@@ -107,17 +106,27 @@ void readNFC()
     SerialUSB.println("");
     delay(1000);  // 1 second halt
   }
-  /*else
-  {
-    // PN532 probably timed out waiting for a card
-    SerialUSB.println("Timed out! Waiting for a card...");
-  }*/
+  return tagId;
+} 
+
+void grantAccess(){
+  digitalWrite(2, HIGH);
+  delay(1000);
+  digitalWrite(2, LOW);
+
+}
+
+void accessCheck(){
+  int fingerID = getFingerprintIDez();
+  String nfcID = readNFC();
+  if(fingerID == 1 || nfcID == "161.162.95.29"){
+    grantAccess();
+  }
+  delay(100);
 }
 
 void loop()
 {
-  readNFC();
-  getFingerprintIDez();
-  delay(100);
+  accessCheck();
 }
 
