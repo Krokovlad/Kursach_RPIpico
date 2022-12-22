@@ -4,12 +4,13 @@
 #include <Adafruit_Fingerprint.h>
 #include <FreeRTOS.h> 
 #include <semphr.h> 
+#include <ArduinoJson.h>
 #define mySerial Serial1
 SemaphoreHandle_t mutex_v; 
 PN532_HSU pn532hsu(Serial2);
 PN532 nfc(pn532hsu);
-TaskHandle_t xHandle;
-TaskHandle_t xHandle1;
+int touchID;
+char* nfcID;
 /*
 ПИНЫ:
   Датчик Отпечатков:
@@ -62,13 +63,13 @@ void setup(void)
         Serial.println("Mutex can not be created"); 
     } 
     
-    xTaskCreate(accessCheck, "Task1", 128, NULL, 1, &xHandle1); 
-    xTaskCreate(grantAccess, "Task2", 128, NULL, 2, &xHandle);
+    xTaskCreate(bookGive, "Task1", 128, NULL, 1, NULL); 
+    xTaskCreate(bookWrite, "Task2", 128, NULL, 2, NULL);
 
     Serial.println("tasks created");
 }
  
- int getFingerprintIDez() {
+ bool getFingerprintIDez() {
   uint8_t p = finger.getImage();
   if (p != FINGERPRINT_OK)  return -1;
   p = finger.image2Tz();
@@ -78,7 +79,7 @@ void setup(void)
   // found a match!
   Serial.print("Found ID #"); Serial.print(finger.fingerID);
   Serial.print(" with confidence of "); Serial.println(finger.confidence);
-  return finger.fingerID;
+  return true;
 }
  
 String tagToString(byte id[4])
@@ -93,7 +94,7 @@ String tagToString(byte id[4])
 }
  
  
-String readNFC()
+bool readNFC()
 {
   tagId = "None";
   boolean success;
@@ -119,33 +120,68 @@ String readNFC()
     Serial.println("");
     delay(100);  // 1 second halt
   }
-  return tagId;
+  return true;
 } 
 
-void grantAccess(void *pvParameters){
-  Serial.println("grantAccess");
+
+StaticJsonDocument<96> bookDoc;
+StaticJsonDocument<96> fingerDoc;
+
+
+JsonObject book = bookDoc.createNestedObject("book");
+book["161.162.95.29"] = "Преступление и наказание";
+book["3.222.220.182"] = "Война и мир";
+
+JsonObject person = fingerDoc.createNestedObject("person");
+person["1"] = "Виталий Корнеплод";
+person["3"] = "Арсений Листожуй";
+
+DynamicJsonDocument listDoc;
+
+void bookWrite(void *pvParameters){
+  Serial.println("bookWrite");
   while(1){
   if(xSemaphoreTake(mutex_v, portMAX_DELAY)){
+    ind id = listDoc.capacity();
     Serial.println("Semaphore Taken");
-    digitalWrite(2, HIGH);
-    vTaskDelay(5000/portTICK_PERIOD_MS);
-    digitalWrite(2, LOW);
-    //xSemaphoreGive(mutex_v); 
+    for(int i; i < id; i++){
+        if(listDoc[to_string(i)]["book"] == bookDoc["book"]["161.162.95.29"] || listDoc[to_string(i)]["book"] == bookDoc["book"]["3.222.220.182"]){
+            listDoc.remove(i);
+        }
+    }
+    
+    JsonObject id = listDoc.createNestedObject(to_string(id));
+        id["book"] = bookDoc["book"][nfcID];
+        id["person"] = fingerDoc["person"][touchID];
     }
   }
 }
 
-void accessCheck(void *pvParameters){
+
+void bookGive(void *pvParameters){
   Serial.println("accessCheck");
+  
   //xSemaphoreTake(mutex_v, portMAX_DELAY);
   while(1){
-    Serial.print(".");
-    int fingerID = getFingerprintIDez();
-    String nfcID = readNFC();
-    if(fingerID == 1 || nfcID == "161.162.95.29"){
-        Serial.println("Semaphore Released");
-        xSemaphoreGive(mutex_v);
+    Serial.println("Provide book tag\n");
+    while(!readNFC()){
+        Serial.print(".");
     }
+    Serial.println("Provide fingerprint\n");
+    while(!getFingerprintIDez()){
+        Serial.print(".");
+    }
+    for(int i = 0; i < 2; i++){
+        if(finger.fingerID == fingerDoc["person"][to_string(i)]){
+            touchID = finger.fingerID;
+        }
+        if(nfcID == bookDoc["book"]["161.162.95.29"] || nfcID == bookDoc["book"]["3.222.220.182"]){
+            nfcID = tagId;
+        }
+    }
+
+    Serial.println("Semaphore Released");
+    xSemaphoreGive(mutex_v);
     vTaskDelay(100/portTICK_PERIOD_MS); //заменить на yield
   }
 }
@@ -154,4 +190,6 @@ void loop()
 {
   //accessCheck();
 }
+
+
 

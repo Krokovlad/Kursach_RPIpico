@@ -62,13 +62,13 @@ void setup(void)
         Serial.println("Mutex can not be created"); 
     } 
     
-    xTaskCreate(accessCheck, "Task1", 128, NULL, 1, &xHandle1); 
-    xTaskCreate(grantAccess, "Task2", 128, NULL, 2, &xHandle);
+  xTaskCreate(accessCheck, "Task1", 128, NULL, 1, &xHandle1); 
+  xTaskCreate(grantAccess, "Task2", 128, NULL, 2, &xHandle);
 
-    Serial.println("tasks created");
+  Serial.println("tasks created");
 }
  
- int getFingerprintIDez() {
+int getFingerprintIDez() {
   uint8_t p = finger.getImage();
   if (p != FINGERPRINT_OK)  return -1;
   p = finger.image2Tz();
