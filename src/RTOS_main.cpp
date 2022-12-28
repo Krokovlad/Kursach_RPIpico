@@ -125,7 +125,7 @@ String readNFC()
 void grantAccess(void *pvParameters){
   Serial.println("grantAccess");
   while(1){
-  if(xSemaphoreTake(mutex_v, portMAX_DELAY)){
+  if(xSemaphoreTake(sem_v, portMAX_DELAY)){
     Serial.println("Semaphore Taken");
     digitalWrite(2, HIGH);
     vTaskDelay(5000/portTICK_PERIOD_MS);
@@ -144,7 +144,7 @@ void accessCheck(void *pvParameters){
     String nfcID = readNFC();
     if(fingerID == 1 || nfcID == "161.162.95.29"){
         Serial.println("Semaphore Released");
-        xSemaphoreGive(mutex_v);
+        xSemaphoreGive(sem_v);
     }
     vTaskDelay(100/portTICK_PERIOD_MS); //заменить на yield
   }

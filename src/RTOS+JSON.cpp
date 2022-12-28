@@ -27,12 +27,10 @@ byte nuidPICC[4];
  
 void setup(void)
 {
-  pinMode(2, OUTPUT);
   Serial.begin(115200);
   while(!Serial){
     delay(1);
   }
-  Serial.println("Hello Maker!");
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (! versiondata)
@@ -41,14 +39,8 @@ void setup(void)
   }
   // Got valid data, print it out!
   Serial.print("Found chip PN5");
-  Serial.println((versiondata >> 24) & 0xFF, HEX);
-  Serial.print("Firmware ver. ");
-  Serial.print((versiondata >> 16) & 0xFF, DEC);
-  Serial.print('.'); 
-  Serial.println((versiondata >> 8) & 0xFF, DEC);
   // Configure board to read RFID tags
   nfc.SAMConfig();
-  //Serial.println("Waiting for an ISO14443A Card ...");
   Serial.println("\n\nAdafruit finger detect test");
   finger.begin(57600);
   delay(5);
@@ -56,16 +48,13 @@ void setup(void)
     Serial.println("Found fingerprint sensor!");
   } else {
     Serial.println("Did not find fingerprint sensor :(");
-    //while (1) { delay(1); }
   }
-  mutex_v = xSemaphoreCreateBinary();
-  if (mutex_v == NULL) { 
+  sem_v = xSemaphoreCreateBinary();
+  if (sem_v == NULL) { 
         Serial.println("Mutex can not be created"); 
     } 
-    
     xTaskCreate(bookGive, "Task1", 128, NULL, 1, NULL); 
     xTaskCreate(bookWrite, "Task2", 128, NULL, 2, NULL);
-
     Serial.println("tasks created");
 }
  
@@ -129,12 +118,12 @@ StaticJsonDocument<96> fingerDoc;
 
 
 JsonObject book = bookDoc.createNestedObject("book");
-book["161.162.95.29"] = "Преступление и наказание";
-book["3.222.220.182"] = "Война и мир";
+book["161.162.95.29"] = "Три товарища";
+book["3.222.220.182"] = "Понедельник начинается в субботу";
 
 JsonObject person = fingerDoc.createNestedObject("person");
-person["1"] = "Виталий Корнеплод";
-person["3"] = "Арсений Листожуй";
+person["1"] = "Джон Смит";
+person["3"] = "Алекс Уайт";
 
 DynamicJsonDocument listDoc;
 
@@ -149,7 +138,6 @@ void bookWrite(void *pvParameters){
             listDoc.remove(i);
         }
     }
-    
     JsonObject id = listDoc.createNestedObject(to_string(id));
         id["book"] = bookDoc["book"][nfcID];
         id["person"] = fingerDoc["person"][touchID];
@@ -160,8 +148,6 @@ void bookWrite(void *pvParameters){
 
 void bookGive(void *pvParameters){
   Serial.println("accessCheck");
-  
-  //xSemaphoreTake(mutex_v, portMAX_DELAY);
   while(1){
     Serial.println("Provide book tag\n");
     while(!readNFC()){
@@ -179,16 +165,15 @@ void bookGive(void *pvParameters){
             nfcID = tagId;
         }
     }
-
     Serial.println("Semaphore Released");
     xSemaphoreGive(mutex_v);
-    vTaskDelay(100/portTICK_PERIOD_MS); //заменить на yield
+    vTaskDelay(100/portTICK_PERIOD_MS);
   }
 }
 
 void loop()
 {
-  //accessCheck();
+    
 }
 
 
